@@ -30,20 +30,21 @@ jobs:
       run:
         shell: bash
     env:
-      PROJECT_DIR: /project/asuswrt-merlin.ng
+      PROJECT_DIR: /project/work/asuswrt-merlin.ng
       RELEASE_DIR: src-rt-6.x.4708
       MODEL: dsl-ac68u
       FW_EXTENDNO: 0-gnuton1-repeater
-      ARTIFACTS_DIR: /project/artifacts
-      HELPER: /project/ci-helper.sh
+      ARTIFACTS_DIR: /project/work/artifacts
+      HELPER: /project/work/ci-helper.sh
     steps:
       - name: Prepare workspace
         run: |
           set -eo pipefail
+          trap 'echo "::error title=prepare failed::line $LINENO: $BASH_COMMAND"' ERR
           df -h
-          mkdir -p /project
+          mkdir -p /project/work
           # Values the docker user needs (sudo drops the environment)
-          cat > /project/ci-env.sh <<EOF
+          cat > /project/work/ci-env.sh <<EOF
           export PROJECT_DIR="${PROJECT_DIR}"
           export RELEASE_DIR="${RELEASE_DIR}"
           export MODEL="${MODEL}"
@@ -59,7 +60,7 @@ jobs:
           # step NAME CMD... : run CMD, keep its output, annotate on failure
           step() {
             local name="$1"; shift
-            local log="/project/step-${name}.log"
+            local log="/project/work/step-${name}.log"
             set +e
             ( "$@" ) 2>&1 | tee "$log"
             local rc=${PIPESTATUS[0]}
@@ -73,18 +74,20 @@ jobs:
           }
           # run_as_docker 'shell code' : run code as the docker user with ci-env.sh loaded
           run_as_docker() {
-            sudo -H -u docker bash -eo pipefail -c "source /project/ci-env.sh; $1"
+            sudo -H -u docker bash -eo pipefail -c "source /project/work/ci-env.sh; $1"
           }
           EOF
-          cat /project/ci-env.sh
-          chown -R docker:docker /home/docker /project
+          cat /project/work/ci-env.sh
+          chown -R docker:docker /project/work
+          chown docker:docker /home/docker
           id docker
+          ls -la /project /project/work
 
       - name: Fetch code
         run: |
           source "$HELPER"
           step fetch run_as_docker '
-            cd /project
+            cd /project/work
             rm -rf asuswrt-merlin.ng
             git clone --depth 1 --branch "$BRANCH" "$REPO_URL" asuswrt-merlin.ng
             cd asuswrt-merlin.ng && git log -1 --oneline
@@ -109,9 +112,9 @@ jobs:
           source "$HELPER"
           step build run_as_docker '
             cd "$PROJECT_DIR/release/$RELEASE_DIR"
-            make "$MODEL" > /project/build.log 2>&1 || {
+            make "$MODEL" > /project/work/build.log 2>&1 || {
               echo "make failed; error lines:"
-              grep -n -E "Error [0-9]+|error:|\*\*\*|undefined reference|No such file or directory" /project/build.log | tail -20
+              grep -n -E "Error [0-9]+|error:|\*\*\*|undefined reference|No such file or directory" /project/work/build.log | tail -20
               exit 1
             }
             echo "------ DONE -----"
@@ -128,7 +131,7 @@ jobs:
             cp "$f" ${ARTIFACTS_DIR}/
             (cd ${ARTIFACTS_DIR} && md5sum "$(basename "$f")" > "$(basename "$f").md5")
           done
-          cp /project/build.log ${ARTIFACTS_DIR}/dsl-ac68u-build.log 2>/dev/null || true
+          cp /project/work/build.log ${ARTIFACTS_DIR}/dsl-ac68u-build.log 2>/dev/null || true
           ls -la ${ARTIFACTS_DIR}
 
       - name: Publish build log to build-logs branch
@@ -137,10 +140,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           source "$HELPER"
-          D=/project/logs-branch; rm -rf $D; mkdir -p $D; cd $D
+          D=/project/work/logs-branch; rm -rf $D; mkdir -p $D; cd $D
           git init -q && git checkout -q -b build-logs
-          cp /project/build.log . 2>/dev/null || echo "no build.log" > build.log
-          cp /project/step-*.log . 2>/dev/null || true
+          cp /project/work/build.log . 2>/dev/null || echo "no build.log" > build.log
+          cp /project/work/step-*.log . 2>/dev/null || true
           ls -la ${ARTIFACTS_DIR} > artifacts.txt 2>&1 || true
           echo "run ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT} sha ${GITHUB_SHA}" > run.txt
           git add -A && git -c user.name=ci -c user.email=ci@localhost commit -q -m "build log for run ${GITHUB_RUN_ID}"
@@ -151,5 +154,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: DSL-AC68U-386.12-repeater
-          path: /project/artifacts
+          path: /project/work/artifacts
           retention-days: 90
