@@ -1,0 +1,14 @@
+------ DONE -----
+total 74192
+drwxrwxr-x  2 docker docker     4096 Oct 24 17:42 .
+drwxrwxr-x 18 docker docker     4096 Oct 24 17:42 ..
+-rw-rw-r--  1 docker docker 35651584 Oct 24 17:42 DSL-AC68U_386.12_0-gnuton1-repeater.trx
+-rw-rw-r--  1 docker docker       92 Oct 24 17:42 DSL-AC68U_386.12_0-gnuton1-repeater_DSL_1.0.5.3.md5
+-rw-rw-r--  1 docker docker 39772669 Oct 24 17:42 DSL-AC68U_386.12_0-gnuton1-repeater_DSL_1.0.5.3.trx
+-rwxrwxrwx  1 docker docker   360918 Oct 24 17:41 compress.sh
+-rw-rw-r--  1 docker docker    25312 Oct 24 17:41 dict_prep.txt
+-rw-rw-r--  1 docker docker   112667 Oct 24 17:40 dictenum.txt
+-rw-rw-r--  1 docker docker    10314 Oct 24 17:41 output2.txt
+-rw-rw-r--  1 docker docker      416 Oct 24 17:41 output3.txt
+lrwxrwxrwx  1 docker docker       79 Oct 24 17:42 vmlinux -> /project/work/asuswrt-merlin.ng/release/src-rt-6.x.4708/linux/linux-2.6/vmlinux
+lrwxrwxrwx  1 docker docker       81 Oct 24 17:42 vmlinux.o -> /project/work/asuswrt-merlin.ng/release/src-rt-6.x.4708/linux/linux-2.6/vmlinux.o

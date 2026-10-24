@@ -1,0 +1,9 @@
+SERIALNO=386.12
+EXTENDNO=0-gnuton1-repeater
+EXTENDNO:=$(EXTENDNO)_rog
+aclocal
+aclocal-1.11
+arm-brcm-linux-uclibcgnueabi-addr2line
+arm-brcm-linux-uclibcgnueabi-ar
+arm-brcm-linux-uclibcgnueabi-as
+arm-brcm-linux-uclibcgnueabi-gcc (Buildroot 2012.02) 4.5.3

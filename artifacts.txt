@@ -1,0 +1,8 @@
+total 83224
+drwxr-xr-x 2 root   root       4096 Oct 24 17:42 .
+drwxr-xr-x 5 docker docker     4096 Oct 24 17:42 ..
+-rw-r--r-- 1 root   root   35651584 Oct 24 17:42 DSL-AC68U_386.12_0-gnuton1-repeater.trx
+-rw-r--r-- 1 root   root         74 Oct 24 17:42 DSL-AC68U_386.12_0-gnuton1-repeater.trx.md5
+-rw-r--r-- 1 root   root   39772669 Oct 24 17:42 DSL-AC68U_386.12_0-gnuton1-repeater_DSL_1.0.5.3.trx
+-rw-r--r-- 1 root   root         86 Oct 24 17:42 DSL-AC68U_386.12_0-gnuton1-repeater_DSL_1.0.5.3.trx.md5
+-rw-r--r-- 1 root   root    9774156 Oct 24 17:42 dsl-ac68u-build.log
