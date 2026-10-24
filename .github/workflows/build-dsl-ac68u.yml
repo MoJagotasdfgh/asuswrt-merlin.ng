@@ -4,6 +4,10 @@ run-name: "DSL-AC68U repeater build"
 # Builds GNUton's 386.12 Merlin firmware for the DSL-AC68U with the
 # Operation Mode / Repeater UI enabled. Adapted from the CircleCI job
 # GNUton used for the 386.x DSL-AC68U releases.
+#
+# The container runs as root (so the runner can write its own files);
+# the build itself runs as the image's "docker" user via run_as_docker.
+# On any failure the last lines of output are posted as an annotation.
 
 on:
   push:
@@ -19,74 +23,100 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 340
     container:
-      # Runs as root so the runner can write its own files; the build
-      # itself runs as the image's "docker" user (see AS_DOCKER below).
       image: gnuton/asuswrt-merlin-toolchains-docker:latest
       volumes:
         - /mnt:/project # /mnt is the large partition on GitHub runners
+    defaults:
+      run:
+        shell: bash
     env:
       PROJECT_DIR: /project/asuswrt-merlin.ng
       RELEASE_DIR: src-rt-6.x.4708
       MODEL: dsl-ac68u
       FW_EXTENDNO: 0-gnuton1-repeater
       ARTIFACTS_DIR: /project/artifacts
-      AS_DOCKER: sudo -E -H -u docker bash -eo pipefail -c
+      HELPER: /project/ci-helper.sh
     steps:
-      - name: Disk space
-        run: df -h
-
       - name: Prepare workspace
         run: |
+          set -eo pipefail
+          df -h
+          mkdir -p /project
+          # Values the docker user needs (sudo drops the environment)
+          cat > /project/ci-env.sh <<EOF
+          export PROJECT_DIR="${PROJECT_DIR}"
+          export RELEASE_DIR="${RELEASE_DIR}"
+          export MODEL="${MODEL}"
+          export FW_EXTENDNO="${FW_EXTENDNO}"
+          export REPO_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          export BRANCH="${GITHUB_REF_NAME}"
+          export HOME=/home/docker
+          export LD_LIBRARY_PATH="/opt/brcm-arm/lib"
+          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/brcm-arm/bin"
+          export MERLINUPDATE=y
+          EOF
+          cat > "${HELPER}" <<'EOF'
+          # step NAME CMD... : run CMD, keep its output, annotate on failure
+          step() {
+            local name="$1"; shift
+            local log="/project/step-${name}.log"
+            set +e
+            ( "$@" ) 2>&1 | tee "$log"
+            local rc=${PIPESTATUS[0]}
+            set -e
+            if [ "$rc" -ne 0 ]; then
+              local msg
+              msg=$(tail -25 "$log" | cut -c1-300 | sed -e 's/%/%25/g' -e 's/\r//g' | sed ':a;N;$!ba;s/\n/%0A/g')
+              echo "::error title=${name} failed (exit ${rc})::${msg}"
+              exit "$rc"
+            fi
+          }
+          # run_as_docker 'shell code' : run code as the docker user with ci-env.sh loaded
+          run_as_docker() {
+            sudo -H -u docker bash -eo pipefail -c "source /project/ci-env.sh; $1"
+          }
+          EOF
+          cat /project/ci-env.sh
           chown -R docker:docker /home/docker /project
-          git config --system --add safe.directory '*'
+          id docker
 
       - name: Fetch code
         run: |
-          $AS_DOCKER '
+          source "$HELPER"
+          step fetch run_as_docker '
             cd /project
-            git clone --depth 1 --branch "${GITHUB_REF_NAME}" \
-              "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" asuswrt-merlin.ng
+            rm -rf asuswrt-merlin.ng
+            git clone --depth 1 --branch "$BRANCH" "$REPO_URL" asuswrt-merlin.ng
             cd asuswrt-merlin.ng && git log -1 --oneline
           '
 
-      - name: Set version
+      - name: Set version and toolchain
         run: |
-          $AS_DOCKER '
-            cd ${PROJECT_DIR}
-            sed -i "s/^EXTENDNO=.*/EXTENDNO=${FW_EXTENDNO}/" release/src-rt/version.conf
-            cat release/src-rt/version.conf
-          '
-
-      - name: Set up ARM toolchain
-        run: |
+          source "$HELPER"
           ln -sfn /home/docker/am-toolchains/brcm-arm-sdk/hndtools-arm-linux-2.6.36-uclibc-4.5.3 /opt/brcm-arm
-          $AS_DOCKER '
-            rm -rf ${PROJECT_DIR}/release/${RELEASE_DIR}/toolchains
-            ln -sfn /home/docker/am-toolchains/brcm-arm-sdk ${PROJECT_DIR}/release/${RELEASE_DIR}/toolchains
+          step setup run_as_docker '
+            cd "$PROJECT_DIR"
+            sed -i "s/^EXTENDNO=.*/EXTENDNO=${FW_EXTENDNO}/" release/src-rt/version.conf
+            grep -E "SERIALNO|EXTENDNO" release/src-rt/version.conf
+            rm -rf "release/$RELEASE_DIR/toolchains"
+            ln -sfn /home/docker/am-toolchains/brcm-arm-sdk "release/$RELEASE_DIR/toolchains"
+            ls /opt/brcm-arm/bin | head -5
+            arm-brcm-linux-uclibcgnueabi-gcc --version | head -1 || arm-linux-gcc --version | head -1 || true
           '
-          ls -la /opt/brcm-arm/bin | head
 
       - name: Build firmware
         run: |
-          $AS_DOCKER '
-            export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/opt/brcm-arm/lib"
-            export PATH="${PATH}:/opt/brcm-arm/bin"
-            export MERLINUPDATE=y
-            cd ${PROJECT_DIR}/release/${RELEASE_DIR}
-            make ${MODEL} 2>&1 | tee /project/build.log
+          source "$HELPER"
+          step build run_as_docker '
+            cd "$PROJECT_DIR/release/$RELEASE_DIR"
+            make "$MODEL" > /project/build.log 2>&1 || {
+              echo "make failed; error lines:"
+              grep -n -E "Error [0-9]+|error:|\*\*\*|undefined reference|No such file or directory" /project/build.log | tail -20
+              exit 1
+            }
             echo "------ DONE -----"
             ls -la image/
           '
-
-      - name: Summarise errors (on failure)
-        if: failure()
-        run: |
-          grep -n -i -E "error|\*\*\*|undefined reference|No such file" /project/build.log \
-            | grep -v -i -E "werror|error\.o|error\.c|-Wno-error|strerror|perror|error_page" \
-            | tail -60 > /project/errors.txt || true
-          echo "===== Error lines ====="; cat /project/errors.txt
-          echo "===== Last 150 lines ====="; tail -150 /project/build.log || true
-          tail -8 /project/errors.txt | while IFS= read -r l; do echo "::error title=build::${l:0:900}"; done
 
       - name: Prepare artifacts
         if: always()
@@ -106,15 +136,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set +e
+          source "$HELPER"
           D=/project/logs-branch; rm -rf $D; mkdir -p $D; cd $D
           git init -q && git checkout -q -b build-logs
-          cp /project/build.log ./build.log 2>/dev/null || echo "no build.log" > build.log
-          cp /project/errors.txt ./errors.txt 2>/dev/null || true
-          ls -la ${ARTIFACTS_DIR} > artifacts.txt 2>&1
+          cp /project/build.log . 2>/dev/null || echo "no build.log" > build.log
+          cp /project/step-*.log . 2>/dev/null || true
+          ls -la ${ARTIFACTS_DIR} > artifacts.txt 2>&1 || true
           echo "run ${GITHUB_RUN_ID} attempt ${GITHUB_RUN_ATTEMPT} sha ${GITHUB_SHA}" > run.txt
           git add -A && git -c user.name=ci -c user.email=ci@localhost commit -q -m "build log for run ${GITHUB_RUN_ID}"
-          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" build-logs
+          step publish git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" build-logs
 
       - name: Upload firmware and log
         if: always()
