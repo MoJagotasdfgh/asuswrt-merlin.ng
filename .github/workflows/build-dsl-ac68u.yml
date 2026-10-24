@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 340
     container:
       image: gnuton/asuswrt-merlin-toolchains-docker:latest
+      options: --user root # the image defaults to a non-root user
       volumes:
         - /mnt:/project # /mnt is the large partition on GitHub runners
     defaults:
