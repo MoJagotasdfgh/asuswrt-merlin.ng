@@ -1,0 +1,94 @@
+name: Build DSL-AC68U (386.12 + Repeater mode)
+run-name: "DSL-AC68U repeater build"
+
+# Builds GNUton's 386.12 Merlin firmware for the DSL-AC68U with the
+# Operation Mode / Repeater UI enabled. Adapted from the CircleCI job
+# GNUton used for the 386.x DSL-AC68U releases.
+
+on:
+  push:
+    branches: [dsl-ac68u-repeater]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build dsl-ac68u
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    container:
+      image: gnuton/asuswrt-merlin-toolchains-docker:latest
+      options: --user docker
+      volumes:
+        - /mnt:/project # /mnt is the large partition on GitHub runners
+    env:
+      PROJECT_DIR: /project/asuswrt-merlin.ng
+      RELEASE_DIR: src-rt-6.x.4708
+      MODEL: dsl-ac68u
+      FW_EXTENDNO: 0-gnuton1-repeater
+      ARTIFACTS_DIR: /project/artifacts
+    steps:
+      - name: Disk space
+        run: df -h
+
+      - name: Fix permissions in docker image
+        run: sudo chown -R docker:docker /github/home /home/docker /project
+
+      - name: Fetch code
+        run: |
+          cd /project
+          git clone --depth 1 --branch "${GITHUB_REF_NAME}" \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" asuswrt-merlin.ng
+          cd asuswrt-merlin.ng && git log -1 --oneline
+
+      - name: Set version
+        run: |
+          cd ${PROJECT_DIR}
+          sed -i "s/^EXTENDNO=.*/EXTENDNO=${FW_EXTENDNO}/" release/src-rt/version.conf
+          cat release/src-rt/version.conf
+
+      - name: Set up ARM toolchain
+        run: |
+          sudo ln -sfn /home/docker/am-toolchains/brcm-arm-sdk/hndtools-arm-linux-2.6.36-uclibc-4.5.3 /opt/brcm-arm
+          rm -rf ${PROJECT_DIR}/release/${RELEASE_DIR}/toolchains
+          ln -sfn /home/docker/am-toolchains/brcm-arm-sdk ${PROJECT_DIR}/release/${RELEASE_DIR}/toolchains
+          ls -la /opt/brcm-arm/bin | head
+
+      - name: Build firmware
+        run: |
+          export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/opt/brcm-arm/lib"
+          export PATH="${PATH}:/opt/brcm-arm/bin"
+          export MERLINUPDATE=y
+          cd ${PROJECT_DIR}/release/${RELEASE_DIR}
+          set -o pipefail
+          make ${MODEL} 2>&1 | tee /project/build.log
+          echo "------ DONE -----"
+          ls -la image/
+
+      - name: Show errors (on failure)
+        if: failure()
+        run: |
+          echo "===== Error lines ====="
+          grep -n -i -E "error|\*\*\*|undefined reference|No such file" /project/build.log | grep -v -i -E "werror|error\.o|error\.c|-Wno-error|strerror|perror" | tail -60 || true
+          echo "===== Last 150 lines ====="
+          tail -150 /project/build.log || true
+
+      - name: Prepare artifacts
+        if: always()
+        run: |
+          mkdir -p ${ARTIFACTS_DIR}
+          IMAGE_PATH=${PROJECT_DIR}/release/${RELEASE_DIR}/image
+          for f in ${IMAGE_PATH}/*.trx; do
+            [ -f "$f" ] || continue
+            cp "$f" ${ARTIFACTS_DIR}/
+            (cd ${ARTIFACTS_DIR} && md5sum "$(basename "$f")" > "$(basename "$f").md5")
+          done
+          cp /project/build.log ${ARTIFACTS_DIR}/dsl-ac68u-build.log 2>/dev/null || true
+          ls -la ${ARTIFACTS_DIR}
+
+      - name: Upload firmware and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DSL-AC68U-386.12-repeater
+          path: /project/artifacts
+          retention-days: 90

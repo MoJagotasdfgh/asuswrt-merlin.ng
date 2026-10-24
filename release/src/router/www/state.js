@@ -1085,8 +1085,8 @@ function show_banner(L3){// L3 = The third Level of Menu
  		banner_code +='<td valign="center" class="titledown" width="auto">';
  	}
 
-	// dsl does not support operation mode, except DSL-AX82U
-	if ((!dsl_support || support_site_modelid=="DSL-AX82U") && !lyra_hide_support) {
+	// dsl does not support operation mode, except DSL-AX82U and DSL-AC68U
+	if ((!dsl_support || support_site_modelid=="DSL-AX82U" || based_modelid=="DSL-AC68U") && !lyra_hide_support) {
 		banner_code +='<span style="font-family:Verdana, Arial, Helvetica, sans-serif;"><#menu5_6_1_title#>:</sapn><span class="title_link" style="text-decoration: none;" id="op_link"><a href="/Advanced_OperationMode_Content.asp" style="color:white"><span id="sw_mode_span" style="text-decoration: underline;"></span></a></span>\n';
 	}
 	banner_code +='<span style="font-family:Verdana, Arial, Helvetica, sans-serif;">Firmware:</sapn><a href="/Advanced_FirmwareUpgrade_Content.asp" style="color:white;"><span id="firmver" class="title_link"></span></a>\n';
@@ -2323,7 +2323,7 @@ function show_top_status(){
 	}
 
 	// no_op_mode
-	if ((!dsl_support || support_site_modelid=="DSL-AX82U") && !lyra_hide_support){
+	if ((!dsl_support || support_site_modelid=="DSL-AX82U" || based_modelid=="DSL-AC68U") && !lyra_hide_support){
 
 		if(sw_mode == "1")  // Show operation mode in banner, Viz 2011.11
 			document.getElementById("sw_mode_span").innerHTML = "<#wireless_router#>";

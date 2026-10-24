@@ -27,7 +27,7 @@ MODELS_HAVE_TRAFFIC_ANALYZER = RT-AC3200 RT-AC87U RT-AC88U RT-AX88U RT-AC86U GT-
 	RT-AXE7800 GT10 RT-AX9000 \
 	GT-AXE11000 GT-AX6000 GT-AX11000_PRO GT-AXE16000 ET12 XT12 RT-AX88U_PRO XC5
 
-QIS_V2 = DSL-AC68U RT-AC88Q
+QIS_V2 = RT-AC88Q
 
 all:
 ifeq ($(and $(HND_ROUTER),$(RTCONFIG_VISUALIZATION)),y)
@@ -101,7 +101,7 @@ ifeq ($(RTCONFIG_ROG_UI), y)
 endif
 #endif
 
-ifneq ($(BUILD_NAME),DSL-AX82U)
+ifneq ($(BUILD_NAME),$(filter $(BUILD_NAME), DSL-AC68U DSL-AX82U))
 	rm -rf $(INSTALLDIR)/www/mobile/js/jstz.min.js
 	rm -rf $(INSTALLDIR)/www/mobile/pages/bridge_cfg_tmp_page.html
 	rm -rf $(INSTALLDIR)/www/mobile/pages/dsl_iptv_page.html
@@ -275,7 +275,7 @@ endif
 ifeq ($(RTCONFIG_DSL),y)
 	rm -rf $(INSTALLDIR)/www/qis/QIS_welcome.htm
 	rm -rf $(INSTALLDIR)/www/qis/QIS_manual.htm
-ifneq ($(BUILD_NAME),DSL-AX82U)
+ifneq ($(BUILD_NAME),$(filter $(BUILD_NAME), DSL-AC68U DSL-AX82U))
 	rm -rf $(INSTALLDIR)/www/Advanced_OperationMode_Content.asp
 endif
 else
